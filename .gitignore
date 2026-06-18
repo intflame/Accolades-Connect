@@ -29,3 +29,6 @@ qr_codes/
 .gradle/
 build/
 local.properties
+
+.vercel
+scratch/

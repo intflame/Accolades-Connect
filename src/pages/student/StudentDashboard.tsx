@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { QRCodeSVG } from 'qrcode.react';
-import { Calendar, MapPin, DollarSign, QrCode, Award, Clock, CheckCircle, AlertCircle, XCircle, X } from 'lucide-react';
+import { Calendar, MapPin, DollarSign, QrCode, Award, Clock, CheckCircle, AlertCircle, XCircle, X, FileText, ArrowRight, UserCheck } from 'lucide-react';
 
 interface Event {
   id: number;
@@ -16,6 +16,15 @@ interface Event {
   status: string;
 }
 
+interface Payment {
+  id: number;
+  payment_method: 'upi' | 'cash';
+  proof_image: string;
+  status: 'pending' | 'approved' | 'rejected';
+  rejection_reason?: string;
+  created_at: string;
+}
+
 interface Registration {
   id: number;
   event_id: number;
@@ -23,17 +32,23 @@ interface Registration {
   payment_method: 'upi' | 'cash';
   created_at: string;
   events: Event;
+  payments?: Payment[];
 }
 
-interface QRToken {
-  token: string;
-  status: string;
+interface AttendanceScan {
+  id: number;
+  scan_type: 'entry' | 'food' | 'exit';
+  scanned_at: string;
+  eventName: string;
+  eventDate: string;
 }
 
 export const StudentDashboard: React.FC = () => {
   const { profile } = useAuth();
+  const [activeTab, setActiveTab] = useState<'events' | 'payments' | 'attendance'>('events');
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
   const [myRegistrations, setMyRegistrations] = useState<Registration[]>([]);
+  const [myScans, setMyScans] = useState<AttendanceScan[]>([]);
   const [loading, setLoading] = useState(true);
 
   // QR Modal state
@@ -58,7 +73,7 @@ export const StudentDashboard: React.FC = () => {
       if (eventsError) throw eventsError;
       setUpcomingEvents(eventsData || []);
 
-      // 2. Fetch student's registrations
+      // 2. Fetch student's registrations and payments details
       const { data: regData, error: regError } = await supabase
         .from('event_registrations')
         .select(`
@@ -75,6 +90,14 @@ export const StudentDashboard: React.FC = () => {
             event_date,
             venue,
             registration_fee
+          ),
+          payments (
+            id,
+            payment_method,
+            proof_image,
+            status,
+            rejection_reason,
+            created_at
           )
         `)
         .eq('student_id', profile.id)
@@ -82,6 +105,44 @@ export const StudentDashboard: React.FC = () => {
 
       if (regError) throw regError;
       setMyRegistrations((regData as any) || []);
+
+      // 3. Fetch student's attendance scans (join tokens, registrations, events)
+      const { data: scanData, error: scanError } = await supabase
+        .from('attendance_scans')
+        .select(`
+          id,
+          scan_type,
+          scanned_at,
+          qr_tokens!inner (
+            registration_id,
+            event_registrations!inner (
+              student_id,
+              events (
+                name,
+                event_date
+              )
+            )
+          )
+        `)
+        .eq('qr_tokens.event_registrations.student_id', profile.id)
+        .order('scanned_at', { ascending: false });
+
+      if (scanError) throw scanError;
+
+      const mappedScans: AttendanceScan[] = (scanData || []).map((item: any) => {
+        const token = item.qr_tokens || {};
+        const reg = token.event_registrations || {};
+        const ev = reg.events || {};
+        return {
+          id: item.id,
+          scan_type: item.scan_type,
+          scanned_at: item.scanned_at,
+          eventName: ev.name || 'Unknown Event',
+          eventDate: ev.event_date || ''
+        };
+      });
+
+      setMyScans(mappedScans);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -96,7 +157,6 @@ export const StudentDashboard: React.FC = () => {
   const handleShowQR = async (registrationId: number, eventName: string) => {
     setActiveEventName(eventName);
     try {
-      // Fetch token from qr_tokens
       const { data, error } = await supabase
         .from('qr_tokens')
         .select('token, status')
@@ -105,7 +165,7 @@ export const StudentDashboard: React.FC = () => {
         .single();
 
       if (error) {
-        alert('QR code is not generated or active yet. Admin must verify payment first.');
+        alert('QR code is not active. Organizer must approve payment before ticket is generated.');
         return;
       }
 
@@ -146,144 +206,329 @@ export const StudentDashboard: React.FC = () => {
       <div className="hero" style={{ padding: '2rem 0' }}>
         <h1 className="hero-title" style={{ fontSize: '2.5rem' }}>Welcome, {profile?.name}!</h1>
         <p className="hero-subtitle" style={{ fontSize: '1.1rem', margin: '0.5rem auto' }}>
-          Register for events, track attendance, and download certificates.
+          Register for upcoming events, view details, track payments, and verify attendance records.
         </p>
       </div>
 
-      {/* 1. Registered Events Section */}
-      <div style={{ marginBottom: '3rem' }}>
-        <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <CheckCircle className="text-primary" /> My Event Registrations
-        </h2>
+      {/* Tabs Controller */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', gap: '1rem', marginBottom: '2.5rem', overflowX: 'auto' }}>
+        <button
+          onClick={() => setActiveTab('events')}
+          className={`tab-btn ${activeTab === 'events' ? 'active' : ''}`}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: activeTab === 'events' ? 'var(--primary)' : 'var(--text-muted)',
+            fontWeight: activeTab === 'events' ? '700' : '500',
+            fontSize: '1.05rem',
+            padding: '0.75rem 1rem',
+            cursor: 'pointer',
+            borderBottom: activeTab === 'events' ? '2px solid var(--primary)' : 'none',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          Upcoming Events
+        </button>
+        <button
+          onClick={() => setActiveTab('payments')}
+          className={`tab-btn ${activeTab === 'payments' ? 'active' : ''}`}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: activeTab === 'payments' ? 'var(--primary)' : 'var(--text-muted)',
+            fontWeight: activeTab === 'payments' ? '700' : '500',
+            fontSize: '1.05rem',
+            padding: '0.75rem 1rem',
+            cursor: 'pointer',
+            borderBottom: activeTab === 'payments' ? '2px solid var(--primary)' : 'none',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          Payment & Passes History
+        </button>
+        <button
+          onClick={() => setActiveTab('attendance')}
+          className={`tab-btn ${activeTab === 'attendance' ? 'active' : ''}`}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: activeTab === 'attendance' ? 'var(--primary)' : 'var(--text-muted)',
+            fontWeight: activeTab === 'attendance' ? '700' : '500',
+            fontSize: '1.05rem',
+            padding: '0.75rem 1rem',
+            cursor: 'pointer',
+            borderBottom: activeTab === 'attendance' ? '2px solid var(--primary)' : 'none',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          Attendance History
+        </button>
+      </div>
 
-        {myRegistrations.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-            <AlertCircle size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
-            <h3>You haven't registered for any events yet.</h3>
-            <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-              Check the upcoming events list below to register!
-            </p>
-          </div>
-        ) : (
-          <div className="table-responsive">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Event Name</th>
-                  <th>Date</th>
-                  <th>Venue</th>
-                  <th>Status</th>
-                  <th>Payment</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {myRegistrations.map((reg) => (
-                  <tr key={reg.id}>
-                    <td><strong>{reg.events.name}</strong></td>
-                    <td>{new Date(reg.events.event_date).toLocaleDateString()}</td>
-                    <td>{reg.events.venue}</td>
-                    <td>{getStatusBadge(reg.status)}</td>
-                    <td>{reg.payment_method ? reg.payment_method.toUpperCase() : 'N/A'}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        {reg.status === 'approved' && (
+      {/* Tab: Upcoming Events */}
+      {activeTab === 'events' && (
+        <div>
+          <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Calendar className="text-primary" /> Upcoming Department Events
+          </h2>
+
+          {upcomingEvents.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+              <Calendar size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
+              <h3>No upcoming events scheduled right now.</h3>
+              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                Please check back later!
+              </p>
+            </div>
+          ) : (
+            <div className="landing-cards">
+              {upcomingEvents.map((event) => {
+                const myReg = myRegistrations.find((r) => r.event_id === event.id);
+                const isRegistered = !!myReg;
+                return (
+                  <div key={event.id} className="card show-alert-anim">
+                    {event.banner_image && (
+                      <img
+                        src={event.banner_image}
+                        alt={event.name}
+                        style={{ width: '100%', height: '160px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', marginBottom: '1rem' }}
+                      />
+                    )}
+                    <h3 style={{ marginBottom: '0.75rem' }}>{event.name}</h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.25rem', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {event.description || 'No description provided.'}
+                    </p>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-main)', marginBottom: '1.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Calendar size={14} className="text-muted" />
+                        <span>{new Date(event.event_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <MapPin size={14} className="text-muted" />
+                        <span>{event.venue}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <DollarSign size={14} className="text-muted" />
+                        <span>{event.registration_fee > 0 ? `₹${event.registration_fee}` : 'FREE Entry'}</span>
+                      </div>
+                    </div>
+
+                    {isRegistered ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '0.5rem', borderRadius: '4px' }}>
+                          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Status:</span>
+                          {getStatusBadge(myReg.status)}
+                        </div>
+                        {myReg.status === 'pending_payment' && (
                           <button
-                            onClick={() => handleShowQR(reg.id, reg.events.name)}
-                            className="btn btn-primary btn-sm"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                          >
-                            <QrCode size={14} /> View Ticket
-                          </button>
-                        )}
-                        {reg.status === 'pending_payment' && (
-                          <button
-                            onClick={() => navigate(`/student/register-event/${reg.event_id}`)}
-                            className="btn btn-accent btn-sm"
+                            onClick={() => navigate(`/student/register-event/${event.id}`)}
+                            className="btn btn-accent"
+                            style={{ width: '100%' }}
                           >
                             Pay Now
                           </button>
                         )}
-                        {reg.status === 'approved' && (
+                        {myReg.status === 'approved' && (
                           <button
-                            onClick={() => navigate('/student/certificates')}
-                            className="btn btn-secondary btn-sm"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            onClick={() => handleShowQR(myReg.id, event.name)}
+                            className="btn btn-primary"
+                            style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                           >
-                            <Award size={14} /> Certificate
+                            <QrCode size={16} /> View entry ticket
                           </button>
                         )}
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* 2. Upcoming Events Section */}
-      <div>
-        <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Calendar className="text-primary" /> Upcoming Department Events
-        </h2>
-
-        {upcomingEvents.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-            <Calendar size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
-            <h3>No upcoming events scheduled right now.</h3>
-            <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-              Please check back later!
-            </p>
-          </div>
-        ) : (
-          <div className="landing-cards">
-            {upcomingEvents.map((event) => {
-              const isRegistered = myRegistrations.some((r) => r.event_id === event.id);
-              return (
-                <div key={event.id} className="card show-alert-anim">
-                  {event.banner_image && (
-                    <img
-                      src={event.banner_image}
-                      alt={event.name}
-                      style={{ width: '100%', height: '150px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', marginBottom: '1rem' }}
-                    />
-                  )}
-                  <h3 style={{ marginBottom: '0.75rem' }}>{event.name}</h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.25rem', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                    {event.description || 'No description provided.'}
-                  </p>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-main)', marginBottom: '1.5rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Calendar size={14} className="text-muted" />
-                      <span>{new Date(event.event_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <MapPin size={14} className="text-muted" />
-                      <span>{event.venue}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <DollarSign size={14} className="text-muted" />
-                      <span>{event.registration_fee > 0 ? `₹${event.registration_fee}` : 'FREE Entry'}</span>
-                    </div>
+                    ) : (
+                      <button
+                        onClick={() => navigate(`/student/register-event/${event.id}`)}
+                        className="btn btn-primary"
+                        style={{ width: '100%' }}
+                      >
+                        Register Now
+                      </button>
+                    )}
                   </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
-                  <button
-                    disabled={isRegistered}
-                    onClick={() => navigate(`/student/register-event/${event.id}`)}
-                    className={`btn ${isRegistered ? 'btn-secondary' : 'btn-primary'}`}
-                    style={{ width: '100%' }}
-                  >
-                    {isRegistered ? 'Already Registered' : 'Register Now'}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {/* Tab: Payment & Passes History */}
+      {activeTab === 'payments' && (
+        <div>
+          <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <DollarSign className="text-primary" /> My Registrations & Payment History
+          </h2>
+
+          {myRegistrations.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+              <Clock size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
+              <h3>No payment records found</h3>
+              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                You haven't registered or submitted payment details for any events yet.
+              </p>
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Event Title</th>
+                    <th>Registration Date</th>
+                    <th>Fee Status</th>
+                    <th>Payment Method</th>
+                    <th>Uploaded Proof</th>
+                    <th>Remarks / Notes</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {myRegistrations.map((reg) => {
+                    const pay = reg.payments && reg.payments.length > 0 ? reg.payments[0] : null;
+                    return (
+                      <tr key={reg.id}>
+                        <td><strong>{reg.events.name}</strong></td>
+                        <td>{new Date(reg.created_at).toLocaleDateString()}</td>
+                        <td>{getStatusBadge(reg.status)}</td>
+                        <td>{reg.payment_method ? reg.payment_method.toUpperCase() : 'N/A'}</td>
+                        <td>
+                          {pay ? (
+                            <a
+                              href={pay.proof_image}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ color: 'var(--primary)', fontWeight: 600, fontSize: '0.85rem' }}
+                            >
+                              View Attachment
+                            </a>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)' }}>None</span>
+                          )}
+                        </td>
+                        <td style={{ maxWidth: '200px' }}>
+                          {pay && pay.status === 'rejected' && pay.rejection_reason && (
+                            <span style={{ color: 'var(--danger)', fontSize: '0.8rem', display: 'block' }}>
+                              <strong>Reason:</strong> {pay.rejection_reason}
+                            </span>
+                          )}
+                          {reg.status === 'approved' && (
+                            <span style={{ color: 'var(--success)', fontSize: '0.8rem' }}>
+                              Verified by admin. Entry pass generated.
+                            </span>
+                          )}
+                          {!pay && reg.status === 'pending_payment' && (
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                              Awaiting receipt upload.
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            {reg.status === 'approved' && (
+                              <button
+                                onClick={() => handleShowQR(reg.id, reg.events.name)}
+                                className="btn btn-primary btn-sm"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                              >
+                                <QrCode size={12} /> Ticket
+                              </button>
+                            )}
+                            {reg.status === 'pending_payment' && (
+                              <button
+                                onClick={() => navigate(`/student/register-event/${reg.event_id}`)}
+                                className="btn btn-accent btn-sm"
+                              >
+                                Pay Now
+                              </button>
+                            )}
+                            {reg.status === 'rejected' && (
+                              <button
+                                onClick={() => navigate(`/student/register-event/${reg.event_id}`)}
+                                className="btn btn-secondary btn-sm"
+                              >
+                                Re-upload Proof
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Attendance History */}
+      {activeTab === 'attendance' && (
+        <div>
+          <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <UserCheck className="text-primary" /> My Event Gate Check-Ins
+          </h2>
+
+          {myScans.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+              <QrCode size={48} style={{ color: 'var(--text-muted)', marginBottom: '1rem' }} />
+              <h3>No entry logs found</h3>
+              <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                Your tickets haven't been scanned at any gates yet. Scans show here in real-time.
+              </p>
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Event Name</th>
+                    <th>Event Date</th>
+                    <th>Gate/Counter Mode</th>
+                    <th>Checked-In Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {myScans.map((scan) => (
+                    <tr key={scan.id}>
+                      <td><strong>{scan.eventName}</strong></td>
+                      <td>{new Date(scan.eventDate).toLocaleDateString()}</td>
+                      <td>
+                        <span
+                          style={{
+                            textTransform: 'uppercase',
+                            fontSize: '0.8rem',
+                            padding: '0.2rem 0.5rem',
+                            borderRadius: '4px',
+                            background:
+                              scan.scan_type === 'entry'
+                                ? 'rgba(59,130,246,0.15)'
+                                : scan.scan_type === 'food'
+                                ? 'rgba(16,185,129,0.15)'
+                                : 'rgba(239,68,68,0.15)',
+                            color:
+                              scan.scan_type === 'entry'
+                                ? '#60a5fa'
+                                : scan.scan_type === 'food'
+                                ? '#34d399'
+                                : '#f87171',
+                            fontWeight: 600
+                          }}
+                        >
+                          {scan.scan_type} Scan
+                        </span>
+                      </td>
+                      <td>{new Date(scan.scanned_at).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* QR Ticket Modal */}
       {isModalOpen && activeQR && (
@@ -302,7 +547,7 @@ export const StudentDashboard: React.FC = () => {
               </p>
             </div>
 
-            <div className="qr-render-box" style={{ margin: '1.5rem auto' }}>
+            <div className="qr-render-box" style={{ margin: '1.5rem auto', background: 'white', padding: '1rem', borderRadius: 'var(--radius-sm)', display: 'inline-block' }}>
               <QRCodeSVG value={activeQR} size={200} />
             </div>
 

@@ -157,17 +157,6 @@ export const EventRegistration: React.FC = () => {
 
       // 2. Process Free Registration Token
       if (isFree) {
-        // Generate active QR Token directly
-        const randomToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        const { error: qrError } = await supabase
-          .from('qr_tokens')
-          .insert({
-            registration_id: registrationId,
-            token: randomToken,
-            status: 'active'
-          });
-
-        if (qrError) console.error('Error generating free QR token:', qrError);
         setSuccess(true);
         setSubmitLoading(false);
         return;

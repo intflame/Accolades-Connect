@@ -125,6 +125,12 @@ create table if not exists public.certificates (
 
 -- RLS (Row Level Security) Policies
 
+-- Helper Function to resolve role checks safely without causing infinite recursion in RLS policies
+create or replace function public.get_my_role()
+returns text as $$
+  select role from public.profiles where id = auth.uid();
+$$ language sql security definer set search_path = public;
+
 -- Enable RLS on all tables
 alter table public.batches enable row level security;
 alter table public.profiles enable row level security;
@@ -139,29 +145,29 @@ alter table public.certificates enable row level security;
 -- Batches Policies
 create policy "Allow read access for all users" on public.batches for select using (true);
 create policy "Allow write access for admins only" on public.batches for all using (
-  exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  public.get_my_role() = 'admin'
 );
 
 -- Profiles Policies
 create policy "Allow users to read profiles" on public.profiles for select using (
   id = auth.uid() or 
-  exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'scanner'))
+  public.get_my_role() in ('admin', 'scanner')
 );
 create policy "Allow users to update own profile" on public.profiles for update using (id = auth.uid());
 create policy "Allow admins full control of profiles" on public.profiles for all using (
-  exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  public.get_my_role() = 'admin'
 );
 
 -- Events Policies
 create policy "Allow read access to events for everyone" on public.events for select using (true);
 create policy "Allow write access to events for admins only" on public.events for all using (
-  exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  public.get_my_role() = 'admin'
 );
 
 -- Event Registrations Policies
 create policy "Allow users to view own registrations" on public.event_registrations for select using (
   student_id = auth.uid() or
-  exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'scanner'))
+  public.get_my_role() in ('admin', 'scanner')
 );
 create policy "Allow students to insert own registrations" on public.event_registrations for insert with check (
   student_id = auth.uid()
@@ -170,7 +176,7 @@ create policy "Allow students to update own registrations" on public.event_regis
   student_id = auth.uid()
 );
 create policy "Allow admins full control of registrations" on public.event_registrations for all using (
-  exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  public.get_my_role() = 'admin'
 );
 
 -- Payments Policies
@@ -179,7 +185,7 @@ create policy "Allow users to view own payments" on public.payments for select u
     select 1 from public.event_registrations r
     where r.id = registration_id and r.student_id = auth.uid()
   ) or
-  exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  public.get_my_role() = 'admin'
 );
 create policy "Allow students to upload payments" on public.payments for insert with check (
   exists (
@@ -188,7 +194,7 @@ create policy "Allow students to upload payments" on public.payments for insert 
   )
 );
 create policy "Allow admins full control of payments" on public.payments for all using (
-  exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  public.get_my_role() = 'admin'
 );
 
 -- QR Tokens Policies
@@ -197,15 +203,15 @@ create policy "Allow users to view own QR tokens" on public.qr_tokens for select
     select 1 from public.event_registrations r
     where r.id = registration_id and r.student_id = auth.uid()
   ) or
-  exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'scanner'))
+  public.get_my_role() in ('admin', 'scanner')
 );
 create policy "Allow admins full control of QR tokens" on public.qr_tokens for all using (
-  exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  public.get_my_role() = 'admin'
 );
 
 -- Attendance Scans Policies
 create policy "Allow scanners and admins to view all scans" on public.attendance_scans for select using (
-  exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'scanner')) or
+  public.get_my_role() in ('admin', 'scanner') or
   exists (
     select 1 from public.qr_tokens t
     join public.event_registrations r on r.id = t.registration_id
@@ -213,19 +219,19 @@ create policy "Allow scanners and admins to view all scans" on public.attendance
   )
 );
 create policy "Allow scanners and admins to insert scans" on public.attendance_scans for insert with check (
-  exists (select 1 from public.profiles where id = auth.uid() and role in ('admin', 'scanner'))
+  public.get_my_role() in ('admin', 'scanner')
 );
 
 -- Activity Logs Policies
 create policy "Allow admins to view activity logs" on public.activity_logs for select using (
-  exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  public.get_my_role() = 'admin'
 );
 create policy "Allow system to insert logs" on public.activity_logs for insert with check (true);
 
 -- Certificates Policies
 create policy "Allow anyone to view certificates" on public.certificates for select using (true);
 create policy "Allow admins to insert/update certificates" on public.certificates for all using (
-  exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+  public.get_my_role() = 'admin'
 );
 
 -- TRIGGERS AND FUNCTIONS
@@ -264,24 +270,15 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
--- Trigger to automatically create QR token and update registration status when payment is approved
+-- Trigger to automatically update registration status when payment is approved
 create or replace function public.handle_payment_approval()
 returns trigger as $$
 begin
   if new.status = 'approved' and old.status != 'approved' then
-    -- Update registration status to approved
+    -- Update registration status to approved (which will fire the registration trigger)
     update public.event_registrations
     set status = 'approved'
     where id = new.registration_id;
-
-    -- Generate a unique QR token if it doesn't exist already
-    insert into public.qr_tokens (registration_id, token, status)
-    values (
-      new.registration_id,
-      encode(hmac(new.registration_id::text || now()::text, 'qr_token_secret_key', 'sha256'), 'hex'),
-      'active'
-    )
-    on conflict do nothing;
   elsif new.status = 'rejected' and old.status != 'rejected' then
     -- Update registration status to rejected
     update public.event_registrations
@@ -297,3 +294,46 @@ drop trigger if exists on_payment_update on public.payments;
 create trigger on_payment_update
   after update on public.payments
   for each row execute procedure public.handle_payment_approval();
+
+-- Trigger to automatically create QR token when registration status is approved (UPI, Cash, or Free)
+create or replace function public.handle_registration_approval()
+returns trigger as $$
+begin
+  if new.status = 'approved' and (tg_op = 'INSERT' or old.status != 'approved') then
+    -- Generate a unique 32-character hexadecimal QR token using built-in uuid-ossp
+    insert into public.qr_tokens (registration_id, token, status)
+    values (
+      new.id,
+      replace(uuid_generate_v4()::text, '-', ''),
+      'active'
+    )
+    on conflict do nothing;
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+-- Create trigger on event_registrations
+drop trigger if exists on_registration_update on public.event_registrations;
+create trigger on_registration_update
+  after insert or update on public.event_registrations
+  for each row execute procedure public.handle_registration_approval();
+
+-- 10. Announcements Table
+create table if not exists public.announcements (
+  id serial primary key,
+  title varchar(150) not null,
+  message text not null,
+  target_role varchar(20) not null check (target_role in ('all', 'student', 'scanner')),
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Enable RLS
+alter table public.announcements enable row level security;
+
+-- Policies for Announcements
+create policy "Allow read access to announcements for everyone" on public.announcements for select using (true);
+create policy "Allow write access to announcements for admins only" on public.announcements for all using (
+  public.get_my_role() = 'admin'
+);

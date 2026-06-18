@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Sun, Moon, LogOut, Menu, X, Award, Calendar, CheckSquare } from 'lucide-react';
+import { Sun, Moon, LogOut, Menu, X, Award, Calendar, CheckSquare, ChevronDown, Users, Shield, FileText, Image, Database, User, Megaphone } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { profile, signOut } = useAuth();
   const [isLightTheme, setIsLightTheme] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState<'operations' | 'system' | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -74,6 +75,26 @@ export const Navbar: React.FC = () => {
                   Certificates
                 </Link>
               </li>
+              <li>
+                <Link
+                  to="/student/profile"
+                  className={`nav-link ${location.pathname === '/student/profile' ? 'active' : ''}`}
+                  onClick={() => setIsOpen(false)}
+                >
+                  <User size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+                  My Profile
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/student/announcements"
+                  className={`nav-link ${location.pathname === '/student/announcements' ? 'active' : ''}`}
+                  onClick={() => setIsOpen(false)}
+                >
+                  <Megaphone size={16} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+                  Announcements
+                </Link>
+              </li>
             </>
           )}
 
@@ -96,28 +117,173 @@ export const Navbar: React.FC = () => {
                 <Link
                   to="/admin"
                   className={`nav-link ${location.pathname === '/admin' ? 'active' : ''}`}
-                  onClick={() => setIsOpen(false)}
+                  onClick={() => { setIsOpen(false); setActiveDropdown(null); }}
                 >
                   Dashboard
                 </Link>
               </li>
-              <li>
-                <Link
-                  to="/admin/registrations"
-                  className={`nav-link ${location.pathname.startsWith('/admin/registrations') ? 'active' : ''}`}
-                  onClick={() => setIsOpen(false)}
+
+              {/* Operations Dropdown */}
+              <li style={{ position: 'relative' }} className="nav-dropdown-wrapper">
+                <button
+                  className="nav-link dropdown-toggle-btn"
+                  onClick={() => setActiveDropdown(activeDropdown === 'operations' ? null : 'operations')}
+                  style={{ background: 'none', border: 'none', color: 'inherit', font: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                 >
-                  Registrations
-                </Link>
+                  Operations <ChevronDown size={14} />
+                </button>
+                {activeDropdown === 'operations' && (
+                  <div
+                    className="dropdown-menu-glass"
+                    style={{
+                      position: isOpen ? 'static' : 'absolute',
+                      top: '100%',
+                      left: 0,
+                      background: 'var(--bg-card)',
+                      backdropFilter: 'var(--glass-blur)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.5rem 0',
+                      minWidth: '190px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      zIndex: 1000,
+                      boxShadow: 'var(--shadow-lg)',
+                      marginTop: isOpen ? '0.5rem' : '0'
+                    }}
+                  >
+                    <Link
+                      to="/admin/events"
+                      className="dropdown-item-link"
+                      onClick={() => { setIsOpen(false); setActiveDropdown(null); }}
+                      style={{ padding: '0.5rem 1rem', color: 'var(--text-main)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <Calendar size={14} /> Manage Events
+                    </Link>
+                    <Link
+                      to="/admin/registrations"
+                      className="dropdown-item-link"
+                      onClick={() => { setIsOpen(false); setActiveDropdown(null); }}
+                      style={{ padding: '0.5rem 1rem', color: 'var(--text-main)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <Users size={14} /> Registrations
+                    </Link>
+                    <Link
+                      to="/admin/payments"
+                      className="dropdown-item-link"
+                      onClick={() => { setIsOpen(false); setActiveDropdown(null); }}
+                      style={{ padding: '0.5rem 1rem', color: 'var(--text-main)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <CheckSquare size={14} /> Verify Payments
+                    </Link>
+                    <Link
+                      to="/admin/attendance"
+                      className="dropdown-item-link"
+                      onClick={() => { setIsOpen(false); setActiveDropdown(null); }}
+                      style={{ padding: '0.5rem 1rem', color: 'var(--text-main)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <CheckSquare size={14} /> Live Attendance
+                    </Link>
+                  </div>
+                )}
               </li>
-              <li>
-                <Link
-                  to="/admin/payments"
-                  className={`nav-link ${location.pathname.startsWith('/admin/payments') ? 'active' : ''}`}
-                  onClick={() => setIsOpen(false)}
+
+              {/* Management Dropdown */}
+              <li style={{ position: 'relative' }} className="nav-dropdown-wrapper">
+                <button
+                  className="nav-link dropdown-toggle-btn"
+                  onClick={() => setActiveDropdown(activeDropdown === 'system' ? null : 'system')}
+                  style={{ background: 'none', border: 'none', color: 'inherit', font: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                 >
-                  Verify Payments
-                </Link>
+                  Management <ChevronDown size={14} />
+                </button>
+                {activeDropdown === 'system' && (
+                  <div
+                    className="dropdown-menu-glass"
+                    style={{
+                      position: isOpen ? 'static' : 'absolute',
+                      top: '100%',
+                      left: 0,
+                      background: 'var(--bg-card)',
+                      backdropFilter: 'var(--glass-blur)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '0.5rem 0',
+                      minWidth: '190px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      zIndex: 1000,
+                      boxShadow: 'var(--shadow-lg)',
+                      marginTop: isOpen ? '0.5rem' : '0'
+                    }}
+                  >
+                    <Link
+                      to="/admin/batches"
+                      className="dropdown-item-link"
+                      onClick={() => { setIsOpen(false); setActiveDropdown(null); }}
+                      style={{ padding: '0.5rem 1rem', color: 'var(--text-main)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <Database size={14} /> Batches Cohort
+                    </Link>
+                    <Link
+                      to="/admin/students"
+                      className="dropdown-item-link"
+                      onClick={() => { setIsOpen(false); setActiveDropdown(null); }}
+                      style={{ padding: '0.5rem 1rem', color: 'var(--text-main)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <Users size={14} /> Student Directory
+                    </Link>
+                    <Link
+                      to="/admin/scanners"
+                      className="dropdown-item-link"
+                      onClick={() => { setIsOpen(false); setActiveDropdown(null); }}
+                      style={{ padding: '0.5rem 1rem', color: 'var(--text-main)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <Shield size={14} /> Scanner Users
+                    </Link>
+                    <Link
+                      to="/admin/certificates"
+                      className="dropdown-item-link"
+                      onClick={() => { setIsOpen(false); setActiveDropdown(null); }}
+                      style={{ padding: '0.5rem 1rem', color: 'var(--text-main)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <Award size={14} /> Certificates
+                    </Link>
+                    <Link
+                      to="/admin/gallery"
+                      className="dropdown-item-link"
+                      onClick={() => { setIsOpen(false); setActiveDropdown(null); }}
+                      style={{ padding: '0.5rem 1rem', color: 'var(--text-main)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <Image size={14} /> Gallery Manager
+                    </Link>
+                    <Link
+                      to="/admin/reports"
+                      className="dropdown-item-link"
+                      onClick={() => { setIsOpen(false); setActiveDropdown(null); }}
+                      style={{ padding: '0.5rem 1rem', color: 'var(--text-main)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <FileText size={14} /> Export Reports
+                    </Link>
+                    <Link
+                      to="/admin/announcements"
+                      className="dropdown-item-link"
+                      onClick={() => { setIsOpen(false); setActiveDropdown(null); }}
+                      style={{ padding: '0.5rem 1rem', color: 'var(--text-main)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <Megaphone size={14} /> Announcements
+                    </Link>
+                    <Link
+                      to="/admin/food-report"
+                      className="dropdown-item-link"
+                      onClick={() => { setIsOpen(false); setActiveDropdown(null); }}
+                      style={{ padding: '0.5rem 1rem', color: 'var(--text-main)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <FileText size={14} /> Food Preference Report
+                    </Link>
+
+                  </div>
+                )}
               </li>
             </>
           )}

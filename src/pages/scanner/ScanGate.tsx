@@ -106,7 +106,11 @@ export const ScanGate: React.FC = () => {
     // Initialize scanner
     const html5QrcodeScanner = new Html5QrcodeScanner(
       'qr-scanner-element',
-      { fps: 8, qrbox: { width: 220, height: 220 } },
+      { 
+        fps: 8, 
+        qrbox: { width: 220, height: 220 },
+        supportedScanTypes: [0] // 0 = SCAN_TYPE_CAMERA (live scan only, no file uploading)
+      },
       /* verbose= */ false
     );
 
