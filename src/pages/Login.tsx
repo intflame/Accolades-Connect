@@ -9,7 +9,6 @@ export const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const { refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 

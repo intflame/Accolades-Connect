@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { Calendar, MapPin, Clock, DollarSign, ArrowRight, Sparkles } from 'lucide-react';
+import { Calendar, MapPin, Clock, ArrowRight, Sparkles } from 'lucide-react';
 import logoAccolades from '../assets/hero.png';
 
 interface Event {
@@ -21,7 +21,7 @@ export const Landing: React.FC = () => {
   const { profile } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+
 
   useEffect(() => {
     const fetchEvents = async () => {

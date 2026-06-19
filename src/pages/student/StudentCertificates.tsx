@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { Award, Calendar, ExternalLink, ShieldAlert } from 'lucide-react';
+import { Award, ExternalLink } from 'lucide-react';
 
 interface Certificate {
   id: number;

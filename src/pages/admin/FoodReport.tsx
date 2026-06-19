@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../context/AuthContext';
-import { Check, X, ClipboardList, RefreshCw, FileText, Search } from 'lucide-react';
+import { Check, X, RefreshCw, FileText } from 'lucide-react';
 
 interface Event {
   id: number;

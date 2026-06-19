@@ -211,7 +211,7 @@ export const ViewCertificate: React.FC = () => {
 
   // Select Background styling based on theme
   const theme = event.certificate_theme ?? 'classic_navy';
-  let themeStyle: React.CSSProperties = {};
+  let themeStyle: React.CSSProperties;
   if (event.certificate_template) {
     themeStyle = {
       backgroundImage: `url(${event.certificate_template})`,

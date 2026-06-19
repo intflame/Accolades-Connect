@@ -99,37 +99,6 @@ export const ScanGate: React.FC = () => {
     fetchEvent();
   }, [eventId]);
 
-  // Handle scanner initialization/disposal
-  useEffect(() => {
-    if (loading || !event || !isScanning || processingScan || scanResult) return;
-
-    // Initialize scanner
-    const html5QrcodeScanner = new Html5QrcodeScanner(
-      'qr-scanner-element',
-      { 
-        fps: 8, 
-        qrbox: { width: 220, height: 220 },
-        supportedScanTypes: [0] // 0 = SCAN_TYPE_CAMERA (live scan only, no file uploading)
-      },
-      /* verbose= */ false
-    );
-
-    html5QrcodeScanner.render(
-      (text) => handleScan(text),
-      (error) => {
-        // ignore scan failures
-      }
-    );
-
-    scannerRef.current = html5QrcodeScanner;
-
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current.clear().catch((e) => console.warn('Scanner clear failed:', e));
-        scannerRef.current = null;
-      }
-    };
-  }, [loading, event, isScanning, processingScan, scanResult]);
 
   const handleScan = async (token: string) => {
     if (processingScan) return;
@@ -396,6 +365,38 @@ export const ScanGate: React.FC = () => {
       setProcessingScan(false);
     }
   };
+
+  // Handle scanner initialization/disposal
+  useEffect(() => {
+    if (loading || !event || !isScanning || processingScan || scanResult) return;
+
+    // Initialize scanner
+    const html5QrcodeScanner = new Html5QrcodeScanner(
+      'qr-scanner-element',
+      { 
+        fps: 8, 
+        qrbox: { width: 220, height: 220 },
+        supportedScanTypes: [0] // 0 = SCAN_TYPE_CAMERA (live scan only, no file uploading)
+      },
+      /* verbose= */ false
+    );
+
+    html5QrcodeScanner.render(
+      (text) => handleScan(text),
+      (error) => {
+        // ignore scan failures
+      }
+    );
+
+    scannerRef.current = html5QrcodeScanner;
+
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current.clear().catch((e) => console.warn('Scanner clear failed:', e));
+        scannerRef.current = null;
+      }
+    };
+  }, [loading, event, isScanning, processingScan, scanResult]);
 
   const handleNextScan = () => {
     setScanResult(null);

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { QRCodeSVG } from 'qrcode.react';
-import { Calendar, MapPin, DollarSign, QrCode, Award, Clock, CheckCircle, AlertCircle, XCircle, X, FileText, ArrowRight, UserCheck } from 'lucide-react';
+import { Calendar, MapPin, DollarSign, QrCode, Clock, CheckCircle, XCircle, X, UserCheck } from 'lucide-react';
 
 interface Event {
   id: number;
