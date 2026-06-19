@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Sun, Moon, LogOut, Menu, X, Award, Calendar, CheckSquare, ChevronDown, Users, Shield, FileText, Image, Database, User, Megaphone } from 'lucide-react';
+import logoCa from '../assets/logo_ca.png';
 
 export const Navbar: React.FC = () => {
-  const { profile, signOut } = useAuth();
+  const { profile, loading, signOut } = useAuth();
   const [isLightTheme, setIsLightTheme] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<'operations' | 'system' | null>(null);
@@ -37,22 +38,77 @@ export const Navbar: React.FC = () => {
     navigate('/login');
   };
 
-  if (!profile) return null;
+  if (loading) return null;
+
+  if (!profile) {
+    return (
+      <nav className="navbar">
+        <div className="container navbar-inner">
+          <Link to="/" className="brand" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <img src={logoCa} alt="CA Logo" style={{ height: '32px', width: '32px', objectFit: 'cover', background: '#fff', padding: '2px', borderRadius: '50%' }} />
+            <span>Accolades Connect</span>
+          </Link>
+
+          {/* Mobile Toggle Button */}
+          <button className="nav-toggle" onClick={() => setIsOpen(!isOpen)}>
+            {isOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+
+          <ul className={`nav-links ${isOpen ? 'active' : ''}`}>
+            <li>
+              <Link
+                to="/"
+                className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
+                onClick={() => setIsOpen(false)}
+              >
+                Home
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/login"
+                className={`nav-link ${location.pathname === '/login' ? 'active' : ''}`}
+                onClick={() => setIsOpen(false)}
+              >
+                Login
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/register"
+                className="btn btn-primary btn-sm"
+                onClick={() => setIsOpen(false)}
+                style={{ display: 'inline-flex', alignItems: 'center' }}
+              >
+                Register
+              </Link>
+            </li>
+            <li style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <button className="theme-toggle-btn" onClick={toggleTheme} title="Toggle Theme">
+                {isLightTheme ? <Moon className="moon-icon" size={18} /> : <Sun className="sun-icon" size={18} />}
+              </button>
+            </li>
+          </ul>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <nav className="navbar">
       <div className="container navbar-inner">
-        <Link to="/" className="brand">
+        <Link to="/" className="brand" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <img src={logoCa} alt="CA Logo" style={{ height: '32px', width: '32px', objectFit: 'cover', background: '#fff', padding: '2px', borderRadius: '50%' }} />
           <span>Accolades Connect</span>
         </Link>
 
         {/* Mobile Toggle Button */}
-        <button className="nav-toggle" onClick={() => setIsOpen(!isOpen)} style={{ display: 'block' }}>
+        <button className="nav-toggle" onClick={() => setIsOpen(!isOpen)}>
           {isOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
 
         {/* Nav Links */}
-        <ul className={`nav-links ${isOpen ? 'active' : ''}`} style={isOpen ? { display: 'flex', flexDirection: 'column', position: 'absolute', top: '100%', left: 0, width: '100%', background: 'var(--bg-main)', padding: '1rem', borderBottom: '1px solid var(--border-color)' } : {}}>
+        <ul className={`nav-links ${isOpen ? 'active' : ''}`}>
           {profile.role === 'student' && (
             <>
               <li>
@@ -289,6 +345,62 @@ export const Navbar: React.FC = () => {
           )}
 
           <li style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            {/* User Profile Avatar */}
+            {profile.role === 'student' ? (
+              <Link to="/student/profile" style={{ display: 'flex', alignItems: 'center' }} title="My Profile">
+                {profile.profile_photo ? (
+                  <img
+                    src={profile.profile_photo}
+                    alt="Profile Avatar"
+                    style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid var(--primary)' }}
+                    className="avatar-hover"
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: '1.5px solid var(--border-color)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--text-main)'
+                    }}
+                  >
+                    <User size={16} />
+                  </div>
+                )}
+              </Link>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center' }} title={`${profile.name} (${profile.role})`}>
+                {profile.profile_photo ? (
+                  <img
+                    src={profile.profile_photo}
+                    alt="Profile Avatar"
+                    style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid var(--primary)' }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: '1.5px solid var(--border-color)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--text-main)'
+                    }}
+                  >
+                    <User size={16} />
+                  </div>
+                )}
+              </div>
+            )}
+
             <button className="theme-toggle-btn" onClick={toggleTheme} title="Toggle Theme">
               {isLightTheme ? <Moon className="moon-icon" size={18} /> : <Sun className="sun-icon" size={18} />}
             </button>

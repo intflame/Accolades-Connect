@@ -168,7 +168,7 @@ export const GalleryManager: React.FC = () => {
         </div>
       )}
 
-      <div className="dashboard-panel" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
+      <div className="dashboard-panel">
         {/* Left Side: Gallery Items Grid */}
         <div>
           <div className="card">

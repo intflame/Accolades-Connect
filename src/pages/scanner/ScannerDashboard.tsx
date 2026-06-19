@@ -130,7 +130,7 @@ export const ScannerDashboard: React.FC = () => {
         </p>
       </div>
 
-      <div className="dashboard-panel" style={{ display: 'grid', gridTemplateColumns: '1.8fr 1.2fr', gap: '2rem' }}>
+      <div className="dashboard-panel">
         {/* Left column: Event list & Scan History */}
         <div>
           {/* Active Events */}

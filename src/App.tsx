@@ -10,6 +10,7 @@ const Login = React.lazy(() => import('./pages/Login').then(m => ({ default: m.L
 const Register = React.lazy(() => import('./pages/Register').then(m => ({ default: m.Register })));
 const ForgotPassword = React.lazy(() => import('./pages/ForgotPassword').then(m => ({ default: m.ForgotPassword })));
 const ResetPassword = React.lazy(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
+const Landing = React.lazy(() => import('./pages/Landing').then(m => ({ default: m.Landing })));
 
 // Student
 const StudentDashboard = React.lazy(() => import('./pages/student/StudentDashboard').then(m => ({ default: m.StudentDashboard })));
@@ -40,26 +41,7 @@ const GalleryManager = React.lazy(() => import('./pages/admin/GalleryManager').t
 const AdminAnnouncements = React.lazy(() => import('./pages/admin/Announcements').then(m => ({ default: m.Announcements })));
 const FoodReport = React.lazy(() => import('./pages/admin/FoodReport').then(m => ({ default: m.FoodReport })));
 
-// Route helper to redirect logged-in users to their respective homeboards
-const RootRedirector: React.FC = () => {
-  const { user, profile, loading } = useAuth();
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
-
-  if (!user || !profile) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (profile.role === 'admin') {
-    return <Navigate to="/admin" replace />;
-  } else if (profile.role === 'scanner') {
-    return <Navigate to="/scanner" replace />;
-  } else {
-    return <Navigate to="/student" replace />;
-  }
-};
 
 // Enforces role-based route access controls
 const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles: ('student' | 'scanner' | 'admin')[] }> = ({
@@ -347,8 +329,8 @@ export const App: React.FC = () => {
               }
             />
 
-            {/* Root Redirector */}
-            <Route path="/" element={<RootRedirector />} />
+            {/* Public Landing Page */}
+            <Route path="/" element={<Layout><Landing /></Layout>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Lock, Mail, Loader2, AlertTriangle } from 'lucide-react';
@@ -11,6 +11,7 @@ export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const { refreshProfile } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,12 +53,13 @@ export const Login: React.FC = () => {
         }
 
         // Redirect based on role
+        const redirect = searchParams.get('redirect');
         if (profileData.role === 'admin') {
           navigate('/admin');
         } else if (profileData.role === 'scanner') {
           navigate('/scanner');
         } else {
-          navigate('/student');
+          navigate(redirect || '/student');
         }
       }
     } catch (err: any) {
