@@ -28,7 +28,8 @@ export const ForgotPassword: React.FC = () => {
 
       setStep('verify');
     } catch (err: any) {
-      setError(err.message || 'Failed to send reset code.');
+      console.error('Password reset error details:', err);
+      setError(err?.message || err?.error_description || 'Failed to send reset code.');
     } finally {
       setLoading(false);
     }
@@ -75,7 +76,8 @@ export const ForgotPassword: React.FC = () => {
         navigate('/login');
       }, 3000);
     } catch (err: any) {
-      setError(err.message || 'Failed to reset password. Verify your code and try again.');
+      console.error('Password verify/reset error details:', err);
+      setError(err?.message || err?.error_description || 'Failed to reset password. Verify your code and try again.');
     } finally {
       setLoading(false);
     }
