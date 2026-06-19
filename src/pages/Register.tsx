@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { User, Mail, Lock, Phone, UserCheck, ShieldAlert, Upload, Loader2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { User, Mail, Lock, Phone, UserCheck, ShieldAlert, Upload, Loader2, KeyRound } from 'lucide-react';
 
 interface Batch {
   id: number;
@@ -9,6 +10,8 @@ interface Batch {
 }
 
 export const Register: React.FC = () => {
+  const navigate = useNavigate();
+  const { refreshProfile } = useAuth();
   const [batches, setBatches] = useState<Batch[]>([]);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -27,6 +30,10 @@ export const Register: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const [step, setStep] = useState<'input' | 'verify'>('input');
+  const [otp, setOtp] = useState('');
+  const [tempUserId, setTempUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchBatches = async () => {
@@ -56,6 +63,57 @@ export const Register: React.FC = () => {
         setPhotoPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const clearForm = () => {
+    setName('');
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
+    setClassRoll('');
+    setUniversityRoll('');
+    setContactNumber('');
+    setWhatsappNumber('');
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setOtp('');
+  };
+
+  const uploadPhoto = async (userId: string) => {
+    if (!photoFile) return;
+
+    try {
+      const fileExt = photoFile.name.split('.').pop();
+      const filePath = `${userId}/profile_${Date.now()}.${fileExt}`;
+
+      // Upload to bucket
+      const { error: uploadError } = await supabase.storage
+        .from('profile_photos')
+        .upload(filePath, photoFile, {
+          upsert: true
+        });
+
+      if (uploadError) {
+        console.error('Photo upload failed but registration completed:', uploadError);
+      } else {
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('profile_photos')
+          .getPublicUrl(filePath);
+
+        // Update profiles table
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ profile_photo: publicUrl })
+          .eq('id', userId);
+
+        if (updateError) {
+          console.error('Failed to update profile photo URL in database:', updateError);
+        }
+      }
+    } catch (err) {
+      console.error('Error during photo upload:', err);
     }
   };
 
@@ -103,46 +161,28 @@ export const Register: React.FC = () => {
         throw new Error('Registration failed. Please try again.');
       }
 
-      // 2. Upload Profile Photo if selected
-      if (photoFile) {
-        const fileExt = photoFile.name.split('.').pop();
-        const filePath = `${userId}/profile_${Date.now()}.${fileExt}`;
+      if (authData.session) {
+        // Case A: Email verification is disabled. Set status to active in database.
+        await supabase
+          .from('profiles')
+          .update({ status: 'active' })
+          .eq('id', userId);
 
-        // Upload to bucket
-        const { error: uploadError } = await supabase.storage
-          .from('profile_photos')
-          .upload(filePath, photoFile, {
-            upsert: true
-          });
+        await uploadPhoto(userId);
 
-        if (uploadError) {
-          console.error('Photo upload failed but registration completed:', uploadError);
-        } else {
-          // Get public URL
-          const { data: { publicUrl } } = supabase.storage
-            .from('profile_photos')
-            .getPublicUrl(filePath);
+        await refreshProfile();
 
-          // Update profiles table (since user was created and we are in trigger, we can update directly)
-          await supabase
-            .from('profiles')
-            .update({ profile_photo: publicUrl })
-            .eq('id', userId);
-        }
+        setSuccess(true);
+        clearForm();
+
+        setTimeout(() => {
+          navigate('/student');
+        }, 3000);
+      } else {
+        // Case B: Email verification is enabled. Transition to OTP step.
+        setTempUserId(userId);
+        setStep('verify');
       }
-
-      setSuccess(true);
-      // Clean up inputs
-      setName('');
-      setEmail('');
-      setPassword('');
-      setConfirmPassword('');
-      setClassRoll('');
-      setUniversityRoll('');
-      setContactNumber('');
-      setWhatsappNumber('');
-      setPhotoFile(null);
-      setPhotoPreview(null);
     } catch (err: any) {
       setError(err.message || 'An error occurred during registration.');
     } finally {
@@ -150,13 +190,63 @@ export const Register: React.FC = () => {
     }
   };
 
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (otp.length !== 6 && otp.length !== 8) {
+      setError('Please enter a valid verification code (6 or 8 characters).');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // 1. Verify the OTP code for signup
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email,
+        token: otp,
+        type: 'signup',
+      });
+
+      if (verifyError) throw verifyError;
+
+      // Update profile status to active in database since email is now verified
+      if (tempUserId) {
+        await supabase
+          .from('profiles')
+          .update({ status: 'active' })
+          .eq('id', tempUserId);
+
+        // 2. Upload Profile Photo if selected (now that we are authenticated)
+        await uploadPhoto(tempUserId);
+      }
+
+      await refreshProfile();
+
+      setSuccess(true);
+      clearForm();
+
+      setTimeout(() => {
+        navigate('/student');
+      }, 3000);
+    } catch (err: any) {
+      console.error('Registration OTP verification error details:', err);
+      setError(err?.message || err?.error_description || 'Failed to verify code. Please check the code and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="auth-wrapper container">
-      <div className="card auth-card show-alert-anim" style={{ maxWidth: '640px' }}>
+      <div className="card auth-card show-alert-anim" style={{ maxWidth: step === 'verify' ? '480px' : '640px' }}>
         <div className="card-header" style={{ textAlign: 'center' }}>
-          <h2>Student Registration</h2>
+          <h2>{step === 'verify' ? 'Verify Email' : 'Student Registration'}</h2>
           <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-            Join the Accolades Connect Portal
+            {step === 'verify'
+              ? `We have sent a verification code to ${email}`
+              : 'Join the Accolades Connect Portal'}
           </p>
         </div>
 
@@ -171,12 +261,12 @@ export const Register: React.FC = () => {
           <div className="alert alert-success">
             <UserCheck className="alert-icon" />
             <div className="alert-content">
-              Registration successful! Your account is pending administrator approval. You can sign in once approved.
+              Registration successful! Redirecting to student dashboard...
             </div>
           </div>
         )}
 
-        {!success && (
+        {!success && step === 'input' && (
           <form onSubmit={handleRegister}>
             <div className="profile-photo-container" style={{ justifyContent: 'center' }}>
               <img
@@ -449,6 +539,62 @@ export const Register: React.FC = () => {
               style={{ width: '100%', marginTop: '1rem' }}
             >
               {loading ? <Loader2 className="alert-icon animate-spin" /> : 'Register'}
+            </button>
+          </form>
+        )}
+
+        {!success && step === 'verify' && (
+          <form onSubmit={handleVerifyOTP}>
+            <div className="form-group">
+              <label className="form-label">Verification Code</label>
+              <div style={{ position: 'relative' }}>
+                <KeyRound
+                  size={18}
+                  style={{
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--text-muted)',
+                  }}
+                />
+                <input
+                  type="text"
+                  required
+                  maxLength={8}
+                  pattern="[a-zA-Z0-9]{6,8}"
+                  className="form-control"
+                  placeholder="Enter verification code..."
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
+                  style={{
+                    paddingLeft: '2.5rem',
+                    letterSpacing: '0.2rem',
+                    fontSize: '1.15rem',
+                    fontWeight: 'bold',
+                    textAlign: 'center',
+                  }}
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn btn-primary"
+              style={{ width: '100%', marginTop: '1rem' }}
+            >
+              {loading ? <Loader2 className="alert-icon animate-spin" /> : 'Verify & Complete'}
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setStep('input')}
+              disabled={loading}
+              style={{ width: '100%', marginTop: '0.5rem' }}
+            >
+              Back to Form
             </button>
           </form>
         )}

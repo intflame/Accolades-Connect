@@ -248,7 +248,7 @@ begin
     case 
       when coalesce(new.raw_user_meta_data->>'role', 'student') = 'admin' then 'active'
       when coalesce(new.raw_user_meta_data->>'role', 'student') = 'scanner' then 'active'
-      else 'pending_approval' -- students need admin approval
+      else 'active' -- students are active immediately upon registration
     end,
     coalesce(new.raw_user_meta_data->>'name', ''),
     new.raw_user_meta_data->>'course',
