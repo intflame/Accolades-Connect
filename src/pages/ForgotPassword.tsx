@@ -44,8 +44,8 @@ export const ForgotPassword: React.FC = () => {
       return;
     }
 
-    if (otp.length < 6 || otp.length > 8) {
-      setError('Please enter a valid 6 to 8-digit verification code.');
+    if (otp.length !== 6) {
+      setError('Please enter a valid 6-digit verification code.');
       return;
     }
 
@@ -90,7 +90,7 @@ export const ForgotPassword: React.FC = () => {
           <h2>Reset Password</h2>
           <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>
             {step === 'request'
-              ? 'We will send a verification code to your email'
+              ? 'We will send a 6-digit verification code to your email'
               : 'Enter verification code and your new password'}
           </p>
         </div>
@@ -152,7 +152,7 @@ export const ForgotPassword: React.FC = () => {
         {!success && step === 'verify' && (
           <form onSubmit={handleVerifyAndReset}>
             <div className="form-group">
-              <label className="form-label">Verification Code</label>
+              <label className="form-label">6-Digit Verification Code</label>
               <div style={{ position: 'relative' }}>
                 <KeyRound
                   size={18}
@@ -167,15 +167,15 @@ export const ForgotPassword: React.FC = () => {
                 <input
                   type="text"
                   required
-                  maxLength={8}
-                  pattern="\d{6,8}"
+                  maxLength={6}
+                  pattern="\d{6}"
                   className="form-control"
-                  placeholder="12345678"
+                  placeholder="123456"
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
                   style={{
                     paddingLeft: '2.5rem',
-                    letterSpacing: '0.2rem',
+                    letterSpacing: '0.35rem',
                     fontSize: '1.15rem',
                     fontWeight: 'bold',
                     textAlign: 'center',
