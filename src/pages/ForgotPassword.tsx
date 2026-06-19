@@ -1,29 +1,81 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Mail, CheckCircle, ShieldAlert, Loader2 } from 'lucide-react';
+import { Mail, CheckCircle, ShieldAlert, Loader2, KeyRound, Lock } from 'lucide-react';
 
 export const ForgotPassword: React.FC = () => {
   const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  
+  const [step, setStep] = useState<'request' | 'verify'>('request');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  const navigate = useNavigate();
 
-  const handleReset = async (e: React.FormEvent) => {
+  const handleRequestReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
 
       if (resetError) throw resetError;
 
-      setSuccess(true);
+      setStep('verify');
     } catch (err: any) {
-      setError(err.message || 'Failed to send reset link.');
+      setError(err.message || 'Failed to send reset code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyAndReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    if (otp.length !== 6) {
+      setError('Please enter a valid 6-digit OTP code.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // 1. Verify the OTP code for password recovery
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email,
+        token: otp,
+        type: 'recovery',
+      });
+
+      if (verifyError) throw verifyError;
+
+      // 2. Update the password for the now authenticated recovery session
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: password,
+      });
+
+      if (updateError) throw updateError;
+
+      // 3. Clear session/sign out so they must log in fresh
+      await supabase.auth.signOut();
+
+      setSuccess(true);
+      setTimeout(() => {
+        navigate('/login');
+      }, 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to reset password. Verify your code and try again.');
     } finally {
       setLoading(false);
     }
@@ -31,11 +83,13 @@ export const ForgotPassword: React.FC = () => {
 
   return (
     <div className="auth-wrapper container">
-      <div className="card auth-card show-alert-anim">
+      <div className="card auth-card show-alert-anim" style={{ maxWidth: '480px' }}>
         <div className="card-header" style={{ textAlign: 'center' }}>
-          <h2>Forgot Password</h2>
+          <h2>Reset Password</h2>
           <p style={{ color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-            We will send you a password reset link
+            {step === 'request'
+              ? 'We will send a 6-digit verification code to your email'
+              : 'Enter verification code and your new password'}
           </p>
         </div>
 
@@ -50,13 +104,13 @@ export const ForgotPassword: React.FC = () => {
           <div className="alert alert-success">
             <CheckCircle className="alert-icon" />
             <div className="alert-content">
-              Reset email sent! Please check your inbox for instructions.
+              Password successfully updated! Redirecting to login...
             </div>
           </div>
         )}
 
-        {!success && (
-          <form onSubmit={handleReset}>
+        {!success && step === 'request' && (
+          <form onSubmit={handleRequestReset}>
             <div className="form-group">
               <label className="form-label">Email Address</label>
               <div style={{ position: 'relative' }}>
@@ -88,7 +142,113 @@ export const ForgotPassword: React.FC = () => {
               className="btn btn-primary"
               style={{ width: '100%', marginTop: '1rem' }}
             >
-              {loading ? <Loader2 className="alert-icon animate-spin" /> : 'Send Reset Link'}
+              {loading ? <Loader2 className="alert-icon animate-spin" /> : 'Send Verification Code'}
+            </button>
+          </form>
+        )}
+
+        {!success && step === 'verify' && (
+          <form onSubmit={handleVerifyAndReset}>
+            <div className="form-group">
+              <label className="form-label">6-Digit Verification Code</label>
+              <div style={{ position: 'relative' }}>
+                <KeyRound
+                  size={18}
+                  style={{
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--text-muted)',
+                  }}
+                />
+                <input
+                  type="text"
+                  required
+                  maxLength={6}
+                  pattern="\d{6}"
+                  className="form-control"
+                  placeholder="123456"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                  style={{
+                    paddingLeft: '2.5rem',
+                    letterSpacing: '0.35rem',
+                    fontSize: '1.15rem',
+                    fontWeight: 'bold',
+                    textAlign: 'center',
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">New Password</label>
+              <div style={{ position: 'relative' }}>
+                <Lock
+                  size={18}
+                  style={{
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--text-muted)',
+                  }}
+                />
+                <input
+                  type="password"
+                  required
+                  className="form-control"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={{ paddingLeft: '2.5rem' }}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Confirm New Password</label>
+              <div style={{ position: 'relative' }}>
+                <Lock
+                  size={18}
+                  style={{
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--text-muted)',
+                  }}
+                />
+                <input
+                  type="password"
+                  required
+                  className="form-control"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  style={{ paddingLeft: '2.5rem' }}
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn btn-primary"
+              style={{ width: '100%', marginTop: '1rem' }}
+            >
+              {loading ? <Loader2 className="alert-icon animate-spin" /> : 'Reset Password'}
+            </button>
+            
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setStep('request')}
+              disabled={loading}
+              style={{ width: '100%', marginTop: '0.5rem' }}
+            >
+              Back
             </button>
           </form>
         )}
